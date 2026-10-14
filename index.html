@@ -1,18 +1,16 @@
-# Let's save the optimized, complete, self-correcting index.html file to the generated directory.
-code_content = """<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>OBS Broadcast Stream Overlay</title>
-    <!-- Include Video.js for HLS .m3u8 traffic streams -->
+    <!-- Video.js styling and player dependencies -->
     <link href="https://zencdn.net" rel="stylesheet" />
     <script src="https://zencdn.net"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
-        /* Pure Chroma Green background for seamless OBS keying */
         body {
-            background-color: #00ff00;
+            background-color: #00ff00; /* Pure Chroma Green for OBS Filter keying */
             font-family: 'Arial', sans-serif;
             width: 1920px;
             height: 1080px;
@@ -20,7 +18,6 @@ code_content = """<!DOCTYPE html>
             position: relative;
         }
 
-        /* Fixed Master Grid Layout */
         .sidebar {
             position: absolute;
             top: 40px;
@@ -31,7 +28,6 @@ code_content = """<!DOCTYPE html>
             gap: 25px;
         }
 
-        /* Newsroom Widget Container Styles */
         .widget-box {
             background: linear-gradient(135deg, #0b2240 0%, #15355e 100%);
             border-left: 6px solid #cc1111;
@@ -65,7 +61,7 @@ code_content = """<!DOCTYPE html>
 
         @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.3;} 100% {opacity: 1;} }
 
-        /* Weather Details Layout */
+        /* Weather UI Elements */
         .weather-main { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
         .temp-display { font-size: 54px; font-weight: bold; color: #ffffff; text-shadow: 2px 2px 4px rgba(0,0,0,0.4); }
         .weather-icon-box { width: 70px; height: 70px; }
@@ -83,7 +79,7 @@ code_content = """<!DOCTYPE html>
         .data-item { display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; }
         .data-label { color: #a0b2c6; font-weight: bold; }
 
-        /* Traffic Camera Mask Viewport (Zoomed to hide timestamps/text) */
+        /* Zoomed Traffic Cam Layout Overlay Viewport Mask */
         .video-viewport {
             width: 100%;
             height: 250px;
@@ -93,15 +89,15 @@ code_content = """<!DOCTYPE html>
             background-color: #000;
         }
         .video-zoom-container {
-            width: 120%; /* Zoom factor to cut off outer edges */
+            width: 120%;
             height: 120%;
             position: absolute;
-            top: -10%; /* Center the cropped viewport zone */
+            top: -10%;
             left: -10%;
         }
         .video-js { width: 100% !important; height: 100% !important; }
 
-        /* Alert Box Parameters */
+        /* Alert Panel Structure styling */
         .alert-item {
             background: rgba(204, 17, 17, 0.15);
             border: 1px solid rgba(204, 17, 17, 0.4);
@@ -112,7 +108,7 @@ code_content = """<!DOCTYPE html>
         }
         .no-alerts { color: #5cb85c; font-style: italic; font-size: 14px; text-align: center; }
 
-        /* Lower Third Broadcast Banner Ticker */
+        /* Broadcast Ticker Lower Third */
         .lower-third {
             position: absolute;
             bottom: 40px;
@@ -139,7 +135,6 @@ code_content = """<!DOCTYPE html>
             font-size: 18px;
             letter-spacing: 1px;
             z-index: 10;
-            box-shadow: 5px 0 15px rgba(0,0,0,0.3);
         }
         .ticker-wrap {
             flex-grow: 1;
@@ -163,7 +158,6 @@ code_content = """<!DOCTYPE html>
             100% { transform: translate3d(-100%, 0, 0); }
         }
 
-        /* Debug Status Console Layer (Hidden from OBS capture window view by color filter if needed, but useful for initial setup) */
         .debug-status {
             position: absolute;
             bottom: 5px;
@@ -175,14 +169,13 @@ code_content = """<!DOCTYPE html>
             padding: 4px 8px;
             border-radius: 3px;
             z-index: 100;
-            pointer-events: none;
         }
     </style>
 </head>
 <body>
 
     <div class="sidebar">
-        <!-- Live Weather Box Layout -->
+        <!-- Weather Box -->
         <div class="widget-box">
             <div class="widget-title">
                 <span>Current Weather</span>
@@ -190,7 +183,7 @@ code_content = """<!DOCTYPE html>
             </div>
             <div class="weather-main">
                 <div class="temp-display" id="w-temp">--°F</div>
-                <div class="weather-icon-box" id="w-icon-container">
+                <div class="weather-icon-box">
                     <img id="w-icon" src="data:image/svg+xml;utf8,<svg xmlns='http://w3.org' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2'><circle cx='12' cy='12' r='5'/></svg>" alt="Icon">
                 </div>
             </div>
@@ -203,7 +196,7 @@ code_content = """<!DOCTYPE html>
             </div>
         </div>
 
-        <!-- Traffic Camera Intermittent Carousel Frame Layout -->
+        <!-- Traffic Cam Carousel Layout Box -->
         <div class="widget-box">
             <div class="widget-title">
                 <span id="cam-label">I-59 Near Pearl River</span>
@@ -216,30 +209,29 @@ code_content = """<!DOCTYPE html>
             </div>
         </div>
 
-        <!-- Hazard & Active Advisories Layout Layout Box -->
+        <!-- Parish Advisory Module -->
         <div class="widget-box">
             <div class="widget-title">PARISH ADVISORIES</div>
             <div id="alerts-container">
-                <div class="no-alerts">Loading advisory monitoring feeds...</div>
+                <div class="no-alerts">Awaiting network check...</div>
             </div>
         </div>
     </div>
 
-    <!-- Horizontal Streaming Lower-Third Banner Line Grid Frame -->
+    <!-- Bottom Streaming Ticker Line Layout Banner -->
     <div class="lower-third">
         <div class="ticker-header">Storm Tracker Alert</div>
         <div class="ticker-wrap">
-            <div class="ticker-move" id="ticker-text">Monitoring live hazards and severe advisory bulletins directly from the National Weather Service stations...</div>
+            <div class="ticker-move" id="ticker-text">Connecting to weather stations...</div>
         </div>
     </div>
 
-    <!-- Active Connectivity Visual Logs console node -->
-    <div class="debug-status" id="debug-log">System: Initializing Handshakes...</div>
+    <!-- Active Stream Debugger Element Overlay Window Log -->
+    <div class="debug-status" id="debug-log">Status: Starting Engine...</div>
 
     <script>
-        // Set up global constant safe links to ensure cross-origin connections bypass loops securely
         const NWS_STATION_URL = 'https://weather.gov';
-        const NWS_ALERTS_URL = 'https://weather.gov'; // St. Tammany Parish Core Descriptor Zone
+        const NWS_ALERTS_URL = 'https://weather.gov'; // St. Tammany Parish
         
         const CAM_STREAMS = [
             'https://la.gov',
@@ -251,13 +243,31 @@ code_content = """<!DOCTYPE html>
         ];
 
         let currentCamIndex = 0;
-        let player;
+        let player = null;
 
         function logDebug(message) {
             document.getElementById('debug-log').innerText = "Status: " + message;
             console.log(message);
         }
 
-        // Initialize VideoJS Player Engine Instance Configuration Safely
-        function initTrafficPlayer() {
-            player = videojs('traffic-player', {
+        // Independent, Sandboxed Weather Data Fetch Execution Loop
+        async function fetchWeather() {
+            logDebug("Fetching NWS Data...");
+            try {
+                const response = await fetch(NWS_STATION_URL, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/geo+json',
+                        'User-Agent': 'OBSWeatherOverlayStreamSystem/2.0 (contact: github-stream-overlay)'
+                    }
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                const props = data.properties;
+
+                const tempC = props.temperature.value;
+                document.getElementById('w-temp').innerText = tempC ? `${Math.round((tempC * 9/5) + 32)}°F` : '--°F';
+
+                const windSpeed = props.windSpeed.value;
+                const windDir = props.windDirection.value;
