@@ -1,21 +1,167 @@
-<!DOCTYPE html>
+import json
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import requests
+
+# ==========================================
+# CONFIGURATION CONSTANTS
+# ==========================================
+# Official NWS Station for Slidell, LA (Slidell Airport)
+WEATHER_STATION = "KASD"
+
+# NWS Zone ID for St. Tammany Parish, LA (used for real-time local advisories)
+NWS_ALERTS_ZONE = "LAZ079"
+
+# Video Streaming URL configuration for the I-59 Pearl River Camera
+TRAFFIC_CAM_URL = "https://streamlock.net"
+
+# Distinct user agent string mandated by NWS API standards to bypass connection blocks
+USER_AGENT = "OBSBroadcastStreamOverlay/2.0 (contact_email@example.com)"
+
+# Global thread-safe structure holding current telemetry data
+live_state = {
+    "temperature": "N/A",
+    "wind": "Calm",
+    "humidity": "N/A",
+    "dewpoint": "N/A",
+    "pressure": "N/A",
+    "visibility": "N/A",
+    "condition": "Clear",
+    "icon": "",
+    "alerts": [],
+    "last_update": "Never"
+}
+
+
+# ==========================================
+# BACKGROUND DATA INGESTION ENGINE
+# ==========================================
+def celsius_to_fahrenheit(c_val):
+    if c_val is None:
+        return "N/A"
+    return f"{round((c_val * 9 / 5) + 32)}°F"
+
+
+def pascals_to_inhg(pa_val):
+    if pa_val is None:
+        return "N/A"
+    return f"{round(pa_val * 0.0002953, 2)} inHg"
+
+
+def meters_to_miles(m_val):
+    if m_val is None:
+        return "N/A"
+    return f"{round(m_val * 0.000621371, 1)} Miles"
+
+
+def format_nws_wind(direction, speed):
+    if not speed or speed == 0:
+        return "Calm"
+    dir_text = ""
+    if direction is not None:
+        dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+        idx = int((direction + 11.25) / 22.5) % 16
+        dir_text = dirs[idx] + " "
+    return f"{dir_text}{round(speed * 2.23694)} MPH"
+
+
+def weather_and_alerts_worker():
+    """Loops indefinitely every 5 minutes fetching fresh data bypassing edge CDNs."""
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/geo+json"}
+
+    while True:
+        timestamp_cb = f"?t={int(time.time())}"
+
+        # 1. Pull Latest Weather Observations
+        obs_url = f"https://weather.gov{WEATHER_STATION}/observations/latest{timestamp_cb}"
+        try:
+            obs_res = requests.get(obs_url, headers=headers, timeout=10)
+            if obs_res.status_code == 200:
+                props = obs_res.json().get("properties", {})
+
+                live_state["temperature"] = celsius_to_fahrenheit(props.get("temperature", {}).get("value"))
+                live_state["dewpoint"] = celsius_to_fahrenheit(props.get("dewpoint", {}).get("value"))
+                live_state["pressure"] = pascals_to_inhg(props.get("barometricPressure", {}).get("value"))
+                live_state["visibility"] = meters_to_miles(props.get("visibility", {}).get("value"))
+                live_state["humidity"] = (
+                    f"{round(props.get('relativeHumidity', {}).get('value'))}%"
+                    if props.get("relativeHumidity", {}).get("value")
+                    else "N/A"
+                )
+                live_state["condition"] = props.get("textDescription", "Clear")
+                live_state["icon"] = props.get("icon", "")
+
+                w_dir = props.get("windDirection", {}).get("value")
+                w_spd = props.get("windSpeed", {}).get("value")
+                live_state["wind"] = format_nws_wind(w_dir, w_spd)
+        except Exception as e:
+            print(f"Weather Fetch Error: {e}")
+
+        # 2. Pull Active Parish Advisories
+        alerts_url = f"https://weather.gov{NWS_ALERTS_ZONE}{timestamp_cb}"
+        try:
+            alert_res = requests.get(alerts_url, headers=headers, timeout=10)
+            if alert_res.status_code == 200:
+                features = alert_res.json().get("features", [])
+                parsed_alerts = []
+                for item in features:
+                    p = item.get("properties", {})
+                    parsed_alerts.append({"event": p.get("event", "Advisory"), "headline": p.get("headline", "")})
+                live_state["alerts"] = parsed_alerts
+        except Exception as e:
+            print(f"Alerts Fetch Error: {e}")
+
+        live_state["last_update"] = time.strftime("%X")
+        time.sleep(300)  # Safe NWS API update check cycle (5 minutes)
+
+
+# ==========================================
+# INTERACTIVE BROWSER WEB SERVER
+# ==========================================
+class OverlayHTTPServer(BaseHTTPRequestHandler):
+
+    def log_message(self, format, *args):
+        return  # Mute web log output in terminal for readability
+
+    def do_GET(self):
+        # API JSON Endpoint serving background live data metrics
+        if self.path.startswith("/api/data"):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(live_state).encode("utf-8"))
+            return
+
+        # Serve UI Base Layer Engine
+        if self.path == "/" or self.path.endswith(".html"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+
+            # Dynamic integration injection including live stream routing and background asynchronous pooling engines
+            html_payload = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>OBS Broadcast Stream Overlay</title>
+    <!-- Include Video.js library safely to natively play the live traffic camera stream format -->
+    <link href="https://zencdn.net" rel="stylesheet" />
+    <script src="https://zencdn.net"></script>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         
-        body {
+        body {{
             background-color: #00ff00; /* Pure Chroma Green for OBS Filter Keying */
             font-family: 'Arial', sans-serif;
             width: 1920px;
             height: 1080px;
             overflow: hidden;
             position: relative;
-        }
+        }}
 
-        .sidebar {
+        .sidebar {{
             position: absolute;
             top: 40px;
             left: 40px;
@@ -23,9 +169,9 @@
             display: flex;
             flex-direction: column;
             gap: 25px;
-        }
+        }}
 
-        .widget-box {
+        .widget-box {{
             background: linear-gradient(135deg, #0b2240 0%, #15355e 100%);
             border-left: 6px solid #cc1111;
             border-radius: 4px;
@@ -33,9 +179,9 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.5);
             padding: 20px;
             overflow: hidden;
-        }
+        }}
 
-        .widget-title {
+        .widget-title {{
             font-size: 18px;
             font-weight: bold;
             text-transform: uppercase;
@@ -46,26 +192,26 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-        }
+        }}
 
-        .live-tag {
+        .live-tag {{
             background-color: #cc1111;
             padding: 2px 8px;
             border-radius: 3px;
             font-size: 12px;
             animation: blink 1.5s infinite;
-        }
+        }}
 
-        @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.3;} 100% {opacity: 1;} }
+        @keyframes blink {{ 0% {{opacity: 1;}} 50% {{opacity: 0.3;}} 100% {{opacity: 1;}} }}
 
         /* Weather UI Layout */
-        .weather-main { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
-        .temp-display { font-size: 54px; font-weight: bold; color: #ffffff; text-shadow: 2px 2px 4px rgba(0,0,0,0.4); }
-        .weather-icon-box { width: 75px; height: 75px; display: flex; align-items: center; justify-content: center; }
-        .weather-icon-box svg { width: 100%; height: 100%; fill: none; stroke: #ffffff; stroke-width: 2; }
-        .weather-icon-box img { width: 100%; height: 100%; object-fit: contain; }
+        .weather-main {{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }}
+        .temp-display {{ font-size: 54px; font-weight: bold; color: #ffffff; text-shadow: 2px 2px 4px rgba(0,0,0,0.4); }}
+        .weather-icon-box {{ width: 75px; height: 75px; display: flex; align-items: center; justify-content: center; }}
+        .weather-icon-box svg {{ width: 100%; height: 100%; fill: none; stroke: #ffffff; stroke-width: 2; }}
+        .weather-icon-box img {{ width: 100%; height: 100%; object-fit: contain; }}
         
-        .weather-grid {
+        .weather-grid {{
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
@@ -73,45 +219,45 @@
             background: rgba(0, 0, 0, 0.2);
             padding: 10px;
             border-radius: 4px;
-        }
-        .data-item { display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; }
-        .data-label { color: #a0b2c6; font-weight: bold; }
+        }}
+        .data-item {{ display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; }}
+        .data-label {{ color: #a0b2c6; font-weight: bold; }}
 
         /* Raw Native Video Viewport Box (Zoomed 20% to Clear Watermarks) */
-        .video-viewport {
+        .video-viewport {{
             width: 100%;
             height: 250px;
             position: relative;
             overflow: hidden;
             border-radius: 4px;
             background-color: #000;
-        }
-        .video-zoom-container {
+        }}
+        .video-zoom-container {{
             width: 120%; 
             height: 120%;
             position: absolute;
             top: -10%;
             left: -10%;
-        }
-        .video-zoom-container video {
-            width: 100%;
-            height: 100%;
-            object-fit: fill;
+        }}
+        .video-zoom-container .video-js {{
+            width: 100% !important;
+            height: 100% !important;
             background-color: #000;
-        }
+        }}
 
-        .alert-item {
+        .alert-item {{
             background: rgba(204, 17, 17, 0.15);
             border: 1px solid rgba(204, 17, 17, 0.4);
             padding: 10px;
             border-radius: 4px;
             font-size: 14px;
             line-height: 1.4;
-        }
-        .no-alerts { color: #5cb85c; font-style: italic; font-size: 14px; text-align: center; }
+            margin-bottom: 8px;
+        }}
+        .no-alerts {{ color: #5cb85c; font-style: italic; font-size: 14px; text-align: center; width: 100%; }}
 
         /* Lower Third Broadcast Ribbon */
-        .lower-third {
+        .lower-third {{
             position: absolute;
             bottom: 40px;
             left: 40px;
@@ -120,147 +266,3 @@
             background: #0b2240;
             border-left: 8px solid #cc1111;
             border-radius: 4px;
-            display: flex;
-            align-items: center;
-            overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-        }
-        .ticker-header {
-            background: #cc1111;
-            color: #ffffff;
-            font-weight: bold;
-            text-transform: uppercase;
-            padding: 0 25px;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            font-size: 18px;
-            letter-spacing: 1px;
-            z-index: 10;
-        }
-        .ticker-wrap {
-            flex-grow: 1;
-            overflow: hidden;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            position: relative;
-        }
-        .ticker-move {
-            display: inline-block;
-            white-space: nowrap;
-            padding-left: 100%;
-            animation: marquee 35s linear infinite;
-            color: #ffffff;
-            font-size: 20px;
-            font-weight: 500;
-        }
-        @keyframes marquee {
-            0% { transform: translate3d(0, 0, 0); }
-            100% { transform: translate3d(-100%, 0, 0); }
-        }
-
-        .debug-status {
-            position: absolute;
-            bottom: 5px;
-            right: 5px;
-            background: rgba(0,0,0,0.8);
-            color: #00ff00;
-            font-family: monospace;
-            font-size: 11px;
-            padding: 4px 8px;
-            border-radius: 3px;
-            z-index: 100;
-        }
-    </style>
-</head>
-<body>
-
-    <div class="sidebar">
-        <!-- Weather Container Grid -->
-        <div class="widget-box">
-            <div class="widget-title">
-                <span>Current Weather</span>
-                <span style="font-size:12px; color:#a0b2c6;">Pearl River, LA</span>
-            </div>
-            <div class="weather-main">
-                <div class="temp-display" id="w-temp">75°F</div>
-                <div class="weather-icon-box" id="w-icon-frame">
-                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 18.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-                </div>
-            </div>
-            <div class="weather-grid">
-                <div class="data-item"><span class="data-label">WIND</span><span id="w-wind">Calm</span></div>
-                <div class="data-item"><span class="data-label">HUMIDITY</span><span id="w-humidity">79%</span></div>
-                <div class="data-item"><span class="data-label">DEW POINT</span><span id="w-dew">68°F</span></div>
-                <div class="data-item"><span class="data-label">PRESSURE</span><span id="w-baro">30.06 inHg</span></div>
-                <div class="data-item" style="grid-column: span 2;"><span class="data-label">VISIBILITY</span><span id="w-vis">10.0 Miles</span></div>
-            </div>
-        </div>
-
-        <!-- Live Streaming Traffic Camera Container -->
-        <div class="widget-box">
-            <div class="widget-title">
-                <span id="cam-label">I-59 Near Pearl River</span>
-                <span class="live-tag">LIVE CAM</span>
-            </div>
-            <div class="video-viewport">
-                <div class="video-zoom-container">
-                    <video id="native-player" autoplay muted playsinline></video>
-                </div>
-            </div>
-        </div>
-
-        <!-- Parish Advisory Widget Box -->
-        <div class="widget-box">
-            <div class="widget-title">PARISH ADVISORIES</div>
-            <div id="alerts-container">
-                <div class="alert-item" style="background: rgba(204,17,17,0.2);">
-                    <strong>DENSE FOG ADVISORY</strong><br>
-                    <span style="font-size:12px; color:#ff9999;">Active dense fog advisory conditions issued for area.</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Scrolling Lower-Third Ribbon -->
-    <div class="lower-third">
-        <div class="ticker-header">Storm Tracker Alert</div>
-        <div class="ticker-wrap">
-            <div class="ticker-move" id="ticker-text">⚠️ DENSE FOG ADVISORY: Widespread dense fog conditions reducing visibility across St. Tammany Parish roadways. Caution advised on I-59 and regional transit corridors.</div>
-        </div>
-    </div>
-
-    <div class="debug-status" id="debug-log">Status: Pipeline Active</div>
-
-    <script>
-        const NWS_STATION_URL = 'https://weather.gov';
-        const NWS_ALERTS_URL = 'https://weather.gov'; 
-
-        const CAM_URLS = [
-            'https://la.gov',
-            'https://la.gov'
-        ];
-        const CAM_NAMES = [
-            'I-59 Near Pearl River (Cam 1)',
-            'I-59 Near Pearl River (Cam 2)'
-        ];
-
-        let currentCamIndex = 0;
-
-        function logDebug(message) {
-            document.getElementById('debug-log').innerText = "Status: " + message;
-        }
-
-        async function fetchWeather() {
-            try {
-                const response = await fetch(NWS_STATION_URL, {
-                    headers: { 'Accept': 'application/geo+json', 'User-Agent': 'OBSWeatherOverlaySystem/7.0' }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    const props = data.properties;
-
-                    if(props.temperature.value !== null) document.getElementById('w-temp').innerText = Math.round((props.temperature.value * 9/5) + 32) + "°F";
-                    if(props.relativeHumidity.value !== null) document.getElementById('w-humidity').innerText = Math.round(props.relativeHumidity.value) + "%";
-                    if(props.windSpeed.value !== null) {
