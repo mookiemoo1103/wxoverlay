@@ -3,9 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <title>OBS Broadcast Stream Overlay</title>
-    <!-- Video.js layout and playback layers -->
+    
+    <!-- Video.js Player Framework Core -->
     <link href="https://zencdn.net" rel="stylesheet" />
     <script src="https://zencdn.net"></script>
+    
+    <!-- CRITICAL: HLS Live Video Parsing Extension Library (Required for .m3u8 Feeds) -->
+    <script src="https://cloudflare.com"></script>
+
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
@@ -61,11 +66,14 @@
 
         @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.3;} 100% {opacity: 1;} }
 
-        /* Weather Metric Display Panels */
+        /* Weather Metric Displays */
         .weather-main { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
         .temp-display { font-size: 54px; font-weight: bold; color: #ffffff; text-shadow: 2px 2px 4px rgba(0,0,0,0.4); }
-        .weather-icon-box { width: 70px; height: 70px; background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-        .weather-icon-box img { width: 80%; height: 80%; object-fit: contain; }
+        .weather-icon-box { width: 70px; height: 70px; display: flex; align-items: center; justify-content: center; }
+        
+        /* Direct Inline SVG Fallback Protection System if Network Blocks Call */
+        .weather-icon-box svg { width: 100%; height: 100%; fill: none; stroke: #ffffff; stroke-width: 2; }
+        .weather-icon-box img { width: 100%; height: 100%; object-fit: contain; }
         
         .weather-grid {
             display: grid;
@@ -79,7 +87,7 @@
         .data-item { display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; }
         .data-label { color: #a0b2c6; font-weight: bold; }
 
-        /* Zoomed Traffic Cam Engine Framing */
+        /* Zoom Viewport Matrix Mask to Hide Streaming Text Overlays */
         .video-viewport {
             width: 100%;
             height: 250px;
@@ -89,15 +97,14 @@
             background-color: #000;
         }
         .video-zoom-container {
-            width: 120%;
-            height: 120%;
+            width: 140%; /* Zoom bumped to 140% to aggressively clear out external stream text margins */
+            height: 140%;
             position: absolute;
-            top: -10%;
-            left: -10%;
+            top: -20%;
+            left: -20%;
         }
         .video-js { width: 100% !important; height: 100% !important; }
 
-        /* Local Warning Panel Parameters */
         .alert-item {
             background: rgba(204, 17, 17, 0.15);
             border: 1px solid rgba(204, 17, 17, 0.4);
@@ -108,7 +115,7 @@
         }
         .no-alerts { color: #5cb85c; font-style: italic; font-size: 14px; text-align: center; }
 
-        /* Horizontal Broadcasting Lower Third Ticker */
+        /* Lower Third Scrolling Marquee */
         .lower-third {
             position: absolute;
             bottom: 40px;
@@ -175,28 +182,29 @@
 <body>
 
     <div class="sidebar">
-        <!-- Live Current Conditions Box -->
+        <!-- Weather Module Layout -->
         <div class="widget-box">
             <div class="widget-title">
                 <span>Current Weather</span>
                 <span style="font-size:12px; color:#a0b2c6;">Pearl River, LA</span>
             </div>
             <div class="weather-main">
-                <div class="temp-display" id="w-temp">75°F</div>
-                <div class="weather-icon-box">
-                    <img id="w-icon" src="https://weather.gov" alt="Icon">
+                <div class="temp-display" id="w-temp">--°F</div>
+                <div class="weather-icon-box" id="w-icon-frame">
+                    <!-- Standard High-Visibility Vector Icon Fallback Core -->
+                    <svg viewBox="0 0 24 24" id="fallback-svg"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 18.36l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
                 </div>
             </div>
             <div class="weather-grid">
-                <div class="data-item"><span class="data-label">WIND</span><span id="w-wind">Calm</span></div>
-                <div class="data-item"><span class="data-label">HUMIDITY</span><span id="w-humidity">79%</span></div>
-                <div class="data-item"><span class="data-label">DEW POINT</span><span id="w-dew">68°F</span></div>
-                <div class="data-item"><span class="data-label">PRESSURE</span><span id="w-baro">30.06 inHg</span></div>
-                <div class="data-item" style="grid-column: span 2;"><span class="data-label">VISIBILITY</span><span id="w-vis">10.0 Miles</span></div>
+                <div class="data-item"><span class="data-label">WIND</span><span id="w-wind">--</span></div>
+                <div class="data-item"><span class="data-label">HUMIDITY</span><span id="w-humidity">--</span></div>
+                <div class="data-item"><span class="data-label">DEW POINT</span><span id="w-dew">--</span></div>
+                <div class="data-item"><span class="data-label">PRESSURE</span><span id="w-baro">--</span></div>
+                <div class="data-item" style="grid-column: span 2;"><span class="data-label">VISIBILITY</span><span id="w-vis">--</span></div>
             </div>
         </div>
 
-        <!-- Video Loop Cam Module Container -->
+        <!-- Live Traffic Feed Container -->
         <div class="widget-box">
             <div class="widget-title">
                 <span id="cam-label">I-59 Near Pearl River</span>
@@ -204,35 +212,34 @@
             </div>
             <div class="video-viewport">
                 <div class="video-zoom-container">
-                    <video id="traffic-player" class="video-js vjs-default-skin" muted playsinline></video>
+                    <video id="traffic-player" class="video-js vjs-default-skin vjs-big-play-centered" muted playsinline></video>
                 </div>
             </div>
         </div>
 
-        <!-- Severe Advisory Display Panel -->
+        <!-- Active Regional Warnings Box -->
         <div class="widget-box">
             <div class="widget-title">PARISH ADVISORIES</div>
             <div id="alerts-container">
-                <div class="alert-item" style="background: rgba(204,17,17,0.25);">
-                    <strong>DENSE FOG ADVISORY</strong><br>
-                    <span style="font-size:12px; color:#ff9999;">In effect from 4:00 AM until 10:00 AM CDT</span>
-                </div>
+                <div class="no-alerts">Initializing connection systems...</div>
             </div>
         </div>
     </div>
 
-    <!-- Scrolling Lower Third Ticker Ribbon Layout -->
+    <!-- Horizontal Streaming Ribbon Ticker -->
     <div class="lower-third">
         <div class="ticker-header">Storm Tracker Alert</div>
         <div class="ticker-wrap">
-            <div class="ticker-move" id="ticker-text">⚠️ DENSE FOG ADVISORY: Localized dense fog visibility reductions forecast across St. Tammany Parish bounds from 4:00 AM until 10:00 AM CDT Wednesday. Monitor transit speeds carefully.</div>
+            <div class="ticker-move" id="ticker-text">Syncing directly with local reporting stations...</div>
         </div>
     </div>
 
-    <!-- Active Connectivity Visual Log Tracker -->
-    <div class="debug-status" id="debug-log">Status: Stream Online</div>
+    <div class="debug-status" id="debug-log">Status: Syncing Elements...</div>
 
     <script>
+        const NWS_STATION_URL = 'https://weather.gov';
+        const NWS_ALERTS_URL = 'https://weather.gov'; 
+
         const CAM_STREAMS = [
             'https://la.gov',
             'https://la.gov'
@@ -249,14 +256,12 @@
             document.getElementById('debug-log').innerText = "Status: " + message;
         }
 
-        // Hard-connected fallbacks ensuring the overlay presents legible metrics even when cross-origin API headers drop
-        async function runDirectObservationSync() {
-            logDebug("Synchronizing observation arrays...");
+        async function fetchWeather() {
+            logDebug("Querying Weather Matrix...");
             try {
-                const res = await fetch('https://weather.gov', {
-                    headers: { 'Accept': 'application/geo+json', 'User-Agent': 'OBSWeatherEngine/3.0' }
+                const response = await fetch(NWS_STATION_URL, {
+                    headers: { 'Accept': 'application/geo+json', 'User-Agent': 'OBSStreamOverlaySystem/4.0' }
                 });
-                if(res.ok) {
-                    const data = await res.json();
-                    const p = data.properties;
-                    if(p.temperature.value) document.getElementById('w-temp').innerText = Math.round((p.temperature.value * 9/5) + 32) + "°F";
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
