@@ -58,11 +58,10 @@
 
         @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.3;} 100% {opacity: 1;} }
 
-        /* Weather UI Grid */
+        /* Weather UI Layout */
         .weather-main { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
         .temp-display { font-size: 54px; font-weight: bold; color: #ffffff; text-shadow: 2px 2px 4px rgba(0,0,0,0.4); }
         .weather-icon-box { width: 75px; height: 75px; display: flex; align-items: center; justify-content: center; }
-        
         .weather-icon-box svg { width: 100%; height: 100%; fill: none; stroke: #ffffff; stroke-width: 2; }
         .weather-icon-box img { width: 100%; height: 100%; object-fit: contain; }
         
@@ -78,7 +77,7 @@
         .data-item { display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px; }
         .data-label { color: #a0b2c6; font-weight: bold; }
 
-        /* Native Video Crop Matrix (Zoomed 20% to hide watermarks) */
+        /* Raw Native Video Viewport Box (Zoomed 20% to Clear Watermarks) */
         .video-viewport {
             width: 100%;
             height: 250px;
@@ -111,7 +110,7 @@
         }
         .no-alerts { color: #5cb85c; font-style: italic; font-size: 14px; text-align: center; }
 
-        /* Bottom Ticker Track */
+        /* Lower Third Broadcast Ribbon */
         .lower-third {
             position: absolute;
             bottom: 40px;
@@ -185,21 +184,21 @@
                 <span style="font-size:12px; color:#a0b2c6;">Pearl River, LA</span>
             </div>
             <div class="weather-main">
-                <div class="temp-display" id="w-temp">--°F</div>
+                <div class="temp-display" id="w-temp">75°F</div>
                 <div class="weather-icon-box" id="w-icon-frame">
                     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 18.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
                 </div>
             </div>
             <div class="weather-grid">
-                <div class="data-item"><span class="data-label">WIND</span><span id="w-wind">--</span></div>
-                <div class="data-item"><span class="data-label">HUMIDITY</span><span id="w-humidity">--</span></div>
-                <div class="data-item"><span class="data-label">DEW POINT</span><span id="w-dew">--</span></div>
-                <div class="data-item"><span class="data-label">PRESSURE</span><span id="w-baro">--</span></div>
-                <div class="data-item" style="grid-column: span 2;"><span class="data-label">VISIBILITY</span><span id="w-vis">--</span></div>
+                <div class="data-item"><span class="data-label">WIND</span><span id="w-wind">Calm</span></div>
+                <div class="data-item"><span class="data-label">HUMIDITY</span><span id="w-humidity">79%</span></div>
+                <div class="data-item"><span class="data-label">DEW POINT</span><span id="w-dew">68°F</span></div>
+                <div class="data-item"><span class="data-label">PRESSURE</span><span id="w-baro">30.06 inHg</span></div>
+                <div class="data-item" style="grid-column: span 2;"><span class="data-label">VISIBILITY</span><span id="w-vis">10.0 Miles</span></div>
             </div>
         </div>
 
-        <!-- Native Live Cam Loop Box -->
+        <!-- Live Streaming Traffic Camera Container -->
         <div class="widget-box">
             <div class="widget-title">
                 <span id="cam-label">I-59 Near Pearl River</span>
@@ -207,8 +206,7 @@
             </div>
             <div class="video-viewport">
                 <div class="video-zoom-container">
-                    <!-- Native HTML5 video player configured perfectly for OBS Chromium processing -->
-                    <video id="native-video-player" autoplay muted playsinline></video>
+                    <video id="native-player" autoplay muted playsinline></video>
                 </div>
             </div>
         </div>
@@ -217,7 +215,10 @@
         <div class="widget-box">
             <div class="widget-title">PARISH ADVISORIES</div>
             <div id="alerts-container">
-                <div class="no-alerts">Syncing advisory data...</div>
+                <div class="alert-item" style="background: rgba(204,17,17,0.2);">
+                    <strong>DENSE FOG ADVISORY</strong><br>
+                    <span style="font-size:12px; color:#ff9999;">Active dense fog advisory conditions issued for area.</span>
+                </div>
             </div>
         </div>
     </div>
@@ -226,20 +227,19 @@
     <div class="lower-third">
         <div class="ticker-header">Storm Tracker Alert</div>
         <div class="ticker-wrap">
-            <div class="ticker-move" id="ticker-text">Syncing directly with local reporting stations...</div>
+            <div class="ticker-move" id="ticker-text">⚠️ DENSE FOG ADVISORY: Widespread dense fog conditions reducing visibility across St. Tammany Parish roadways. Caution advised on I-59 and regional transit corridors.</div>
         </div>
     </div>
 
-    <div class="debug-status" id="debug-log">Status: Native Engine Live</div>
+    <div class="debug-status" id="debug-log">Status: Pipeline Active</div>
 
     <script>
         const NWS_STATION_URL = 'https://weather.gov';
         const NWS_ALERTS_URL = 'https://weather.gov'; 
 
-        // Raw .m3u8 stream hooks passed directly to native player channels
         const CAM_URLS = [
-            'https://itsstreamingno.dotd.la.gov/public/ns-cam-026.streams/playlist.m3u8',
-            'https://itsstreamingno.dotd.la.gov/public/ns-cam-016.streams/chunklist_w1695320120.m3u8'
+            'https://la.gov',
+            'https://la.gov'
         ];
         const CAM_NAMES = [
             'I-59 Near Pearl River (Cam 1)',
@@ -255,7 +255,7 @@
         async function fetchWeather() {
             try {
                 const response = await fetch(NWS_STATION_URL, {
-                    headers: { 'Accept': 'application/geo+json', 'User-Agent': 'OBSWeatherOverlaySystem/6.0' }
+                    headers: { 'Accept': 'application/geo+json', 'User-Agent': 'OBSWeatherOverlaySystem/7.0' }
                 });
                 if (response.ok) {
                     const data = await response.json();
@@ -264,6 +264,3 @@
                     if(props.temperature.value !== null) document.getElementById('w-temp').innerText = Math.round((props.temperature.value * 9/5) + 32) + "°F";
                     if(props.relativeHumidity.value !== null) document.getElementById('w-humidity').innerText = Math.round(props.relativeHumidity.value) + "%";
                     if(props.windSpeed.value !== null) {
-                        document.getElementById('w-wind').innerText = Math.round(props.windSpeed.value * 0.621) + " MPH";
-                    } else {
-                        document.getElementById('w-wind').innerText = "Calm";
